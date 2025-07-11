@@ -227,7 +227,7 @@
             sortedWords.forEach(({ word, index }) => {
                 let placed = false;
                 let attempts = 0;
-                const maxAttempts = 10000;
+                const maxAttempts = 15000;
 
                 while (!placed && attempts < maxAttempts) {
                     attempts++;
@@ -243,7 +243,12 @@
                             word: displayWords[index],
                             direction: dir.name,
                             reverse: reverse,
-                            start: { row, col }
+                            start: { row, col },
+                            wordInGrid: wordToPlace,
+                            cells: Array.from({ length: wordToPlace.length }, (_, i) => ({
+                                row: row + i * dir.dr,
+                                col: col + i * dir.dc
+                            }))
                         });
                         placed = true;
                     }
@@ -300,25 +305,11 @@
             }
 
             hintWords.forEach(wordInfo => {
-                const { start, direction, reverse, word } = wordInfo;
-                const wordToPlace = reverse ? words[displayWords.indexOf(word)].split('').reverse().join('') : words[displayWords.indexOf(word)];
-                const dir = [
-                    { dr: 0, dc: 1, name: 'ngang phải' },
-                    { dr: 0, dc: -1, name: 'ngang trái' },
-                    { dr: 1, dc: 0, name: 'dọc xuống' },
-                    { dr: -1, dc: 0, name: 'dọc lên' },
-                    { dr: 1, dc: 1, name: 'chéo xuống phải' },
-                    { dr: -1, dc: 1, name: 'chéo lên phải' },
-                    { dr: 1, dc: -1, name: 'chéo xuống trái' },
-                    { dr: -1, dc: -1, name: 'chéo lên trái' }
-                ].find(d => d.name === direction);
-
-                for (let i = 0; i < wordToPlace.length; i++) {
-                    const r = start.row + i * dir.dr;
-                    const c = start.col + i * dir.dc;
-                    const cell = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
+                const { cells } = wordInfo;
+                cells.forEach(({ row, col }) => {
+                    const cell = document.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
                     if (cell) cell.classList.add('hint');
-                }
+                });
             });
 
             setTimeout(() => {
@@ -495,18 +486,42 @@
         function checkSelectedWord() {
             const selectedText = selectedCells.map(cell => cell.textContent).join('');
             const reverseText = selectedText.split('').reverse().join('');
+            const selectedPositions = selectedCells.map(cell => ({
+                row: parseInt(cell.dataset.row),
+                col: parseInt(cell.dataset.col)
+            }));
+
             let wordFound = null;
             let wordIndex = null;
 
-            if (words.includes(selectedText)) {
-                wordFound = selectedText;
-                wordIndex = words.indexOf(selectedText);
-            } else if (words.includes(reverseText)) {
-                wordFound = reverseText;
-                wordIndex = words.indexOf(reverseText);
+            for (let i = 0; i < placedWordDirections.length; i++) {
+                const { wordInGrid, cells, word } = placedWordDirections[i];
+                const originalWord = words[displayWords.indexOf(word)];
+
+                if (selectedText === wordInGrid || reverseText === wordInGrid) {
+                    const expectedCells = [...cells];
+                    if (selectedText === wordInGrid) {
+                        if (selectedPositions.length === expectedCells.length &&
+                            selectedPositions.every((pos, idx) =>
+                                pos.row === expectedCells[idx].row && pos.col === expectedCells[idx].col)) {
+                            wordFound = originalWord;
+                            wordIndex = i;
+                            break;
+                        }
+                    } else if (reverseText === wordInGrid) {
+                        const reversedCells = [...cells].reverse();
+                        if (selectedPositions.length === expectedCells.length &&
+                            selectedPositions.every((pos, idx) =>
+                                pos.row === reversedCells[idx].row && pos.col === reversedCells[idx].col)) {
+                            wordFound = originalWord;
+                            wordIndex = i;
+                            break;
+                        }
+                    }
+                }
             }
 
-            if (wordFound) {
+            if (wordFound && !foundWords.includes(wordFound)) {
                 foundWords.push(wordFound);
                 const color = colorSets[foundWords.length - 1] || colorSets[Math.floor(Math.random() * colorSets.length)];
                 wordColors[wordFound] = color;
@@ -521,7 +536,8 @@
                     origin: { y: 0.6 },
                     colors: ['#ff0000', '#00ff00', '#0000ff', '#ffff00']
                 });
-                console.log(`Tìm thấy từ: ${displayWords[wordIndex]} (${words[wordIndex]}) với màu: ${color}`);
+                console.log(`Tìm thấy từ: ${displayWords[words.indexOf(wordFound)]} (${wordFound}) với màu: ${color}`);
+                console.log(`Vị trí chọn:`, selectedPositions);
                 if (foundWords.length === words.length) {
                     alert('Chúc mừng! Bạn đã tìm hết tất cả các từ!');
                     stopTimer();
